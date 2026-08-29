@@ -22,7 +22,18 @@ const tips = [
 ]
 
 type TabId = typeof tabs[number]["id"]
-type Expression = "happy" | "thinking" | "curious" | "insight" | "cheer" | "relaxed" | "worried" | "hello"
+type Expression = "happy" | "thinking" | "curious" | "insight" | "cheer" | "relaxed" | "worried" | "hello" | "angry"
+
+// 目標達成→笑顔、未達成→怒り、それ以外→ふだんの顔
+const MASCOT_SRC: Record<string, string> = {
+  angry: "/relife-mocomo-angry.png",
+  worried: "/relife-mocomo-angry.png",
+  happy: "/relife-mocomo-happy.png",
+  cheer: "/relife-mocomo-happy.png",
+}
+function mascotImage(expression: Expression) {
+  return MASCOT_SRC[expression] ?? "/relife-mocomo.png"
+}
 
 // あなたのデータから、一人ひとりに合う習慣を組み立てる仕組み
 type Rec = { key: string; title: string; reason: string; step: string; effect: string; tone: string; score: number }
@@ -126,7 +137,7 @@ function buildAnalysis(weekly: number[], today: number, goal: number) {
 }
 
 function Mascot({ expression, className = "" }: { expression: Expression; className?: string }) {
-  return <div className={`mascot-character expression-${expression} ${className}`} role="img" aria-label="モコモコ"><img src="/relife-mocomo.png" alt="" /></div>
+  return <div className={`mascot-character expression-${expression} ${className}`} role="img" aria-label="モコモコ"><img src={mascotImage(expression) || "/placeholder.svg"} alt="" /></div>
 }
 
 export default function HomePage() {
@@ -137,7 +148,13 @@ export default function HomePage() {
   const [selectedTip, setSelectedTip] = useState<number | null>(null)
   const [mascotReacting, setMascotReacting] = useState(false)
   const over = screenTime - goal
-  const expression: Expression = activeTab === "record" ? (over > 1 ? "worried" : "thinking") : activeTab === "ai" ? (analyzing ? "thinking" : "insight") : activeTab === "visual" ? "curious" : activeTab === "tips" ? "cheer" : activeTab === "profile" ? "relaxed" : "happy"
+  const goalMet = over <= 0
+  // 目標を超えたら怒り顔、達成できたら笑顔
+  const moodByGoal: Expression = goalMet ? "happy" : "angry"
+  const expression: Expression =
+    activeTab === "ai" && analyzing ? "thinking"
+    : activeTab === "profile" ? "relaxed"
+    : moodByGoal
   const analysis = useMemo(() => buildAnalysis(WEEKLY, screenTime, goal), [screenTime, goal])
   const analyze = () => { setActiveTab("ai"); setAnalyzing(true); window.setTimeout(() => setAnalyzing(false), 1300) }
   const switchTab = (id: TabId) => { setActiveTab(id); setSelectedTip(null); setMascotReacting(true); window.setTimeout(() => setMascotReacting(false), 450) }
