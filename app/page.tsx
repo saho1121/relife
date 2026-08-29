@@ -15,6 +15,27 @@ const tabs = [
 const WEEKLY = [3.2, 5.1, 4, 6.2, 3.8, 4.5, 2.9]
 const DAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"]
 
+// スクリーンタイムを何に使ったか、カテゴリで分けて記録する
+const CATEGORIES = [
+  { key: "sns", label: "SNS", note: "Instagram・X など", color: "#eaa9ab", kind: "leisure" },
+  { key: "video", label: "動画・エンタメ", note: "YouTube・配信など", color: "#b6a8e0", kind: "leisure" },
+  { key: "game", label: "ゲーム", note: "アプリゲームなど", color: "#f0b88f", kind: "leisure" },
+  { key: "work", label: "仕事・勉強", note: "調べもの・作業など", color: "#8fccb8", kind: "focus" },
+  { key: "other", label: "その他", note: "連絡・地図など", color: "#cbb8c2", kind: "focus" },
+] as const
+
+type CatKey = typeof CATEGORIES[number]["key"]
+type Breakdown = Record<CatKey, number>
+
+const DEFAULT_BREAKDOWN: Breakdown = { sns: 1.8, video: 1.2, game: 0.4, work: 0.8, other: 0.3 }
+
+// 使いすぎになりがちなカテゴリ別の、やさしい提案
+const CAT_ADVICE: Record<string, { title: string; step: string; effect: string }> = {
+  sns: { title: "SNSは時間を決めて楽しむ", step: "アプリに1日の利用時間の上限を設定して、その中で気持ちよく楽しもう。", effect: "SNSに -30分" },
+  video: { title: "動画は「あと1本」で止める", step: "見る前に本数を決めておくと、だらだら視聴をふせげます。", effect: "動画に -40分" },
+  game: { title: "ゲームは始める前にアラーム", step: "プレイ前にタイマーをセットして、区切りのタイミングをつくろう。", effect: "ゲームに -30分" },
+}
+
 const tips = [
   ["寝る前はスマホを置いてみる", "寝る30分前に、画面から離れる時間をつくろう", "mint", "眠る前の光を減らすと、心と体がゆっくり休む準備を始められます。まずはベッドから少し離れた場所にスマホを置いてみよう。"],
   ["朝の10分を自分の時間に", "起きてすぐのスマホを、少しだけ後回しに", "pink", "カーテンを開けて深呼吸したり、お水を飲んだり。スマホを見る前の10分を、自分のために使ってみよう。"],
@@ -38,7 +59,16 @@ function mascotImage(expression: Expression) {
 // あなたのデータから、一人ひとりに合う習慣を組み立てる仕組み
 type Rec = { key: string; title: string; reason: string; step: string; effect: string; tone: string; score: number }
 
-function buildAnalysis(weekly: number[], today: number, goal: number) {
+function buildAnalysis(weekly: number[], breakdown: Breakdown, goal: number) {
+  const today = CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0)
+  const leisure = CATEGORIES.filter(c => c.kind === "leisure").reduce((sum, c) => sum + (breakdown[c.key] || 0), 0)
+  const focus = today - leisure
+  // いちばん長い息抜きカテゴリを見つける
+  const leisureCats = CATEGORIES.filter(c => c.kind === "leisure")
+  const topCat = leisureCats.reduce((top, c) => (breakdown[c.key] > breakdown[top.key] ? c : top), leisureCats[0])
+  const topVal = breakdown[topCat.key]
+  const topShare = today > 0 ? (topVal / today) * 100 : 0
+
   const avg = weekly.reduce((a, b) => a + b, 0) / weekly.length
   const firstHalf = weekly.slice(0, 3).reduce((a, b) => a + b, 0) / 3
   const lastHalf = weekly.slice(-3).reduce((a, b) => a + b, 0) / 3
@@ -47,7 +77,6 @@ function buildAnalysis(weekly: number[], today: number, goal: number) {
     trendDelta < -0.4 ? "improving" : trendDelta > 0.4 ? "worsening" : "steady"
   const worstIdx = weekly.indexOf(Math.max(...weekly))
   const worstVal = weekly[worstIdx]
-  const swing = Math.max(...weekly) - Math.min(...weekly)
   const weekendAvg = (weekly[5] + weekly[6]) / 2
   const weekdayAvg = weekly.slice(0, 5).reduce((a, b) => a + b, 0) / 5
   const gap = avg - goal
@@ -55,14 +84,33 @@ function buildAnalysis(weekly: number[], today: number, goal: number) {
   const level: "good" | "close" | "over" = gap <= 0 ? "good" : gap <= 1 ? "close" : "over"
 
   const pool: Rec[] = [
+    // いちばん長い息抜きカテゴリへの提案（あなたのデータに一番効く）
+    {
+      key: `cat-${topCat.key}`,
+      title: CAT_ADVICE[topCat.key]?.title ?? "使いすぎのアプリと少し距離を",
+      tone: "pink",
+      reason: `今日のいちばんは ${topCat.label} で ${topVal.toFixed(1)}時間（全体の約${Math.round(topShare)}%）。ここが整うと大きく変わります。`,
+      step: CAT_ADVICE[topCat.key]?.step ?? "使う時間帯を決めて、その中だけで楽しもう。",
+      effect: CAT_ADVICE[topCat.key]?.effect ?? "いちばんを -30分",
+      score: topVal * 4,
+    },
     {
       key: "evening",
       title: "夜のスマホをそっと手放す",
       tone: "mint",
-      reason: `目標より平均で ${gap.toFixed(1)}時間 多め。夜の時間が積み重なっているのかも。`,
+      reason: `息抜きの時間が合計 ${leisure.toFixed(1)}時間。夜に積み重なっているのかも。`,
       step: "寝る30分前に、スマホをベッドから少し離れた場所へ。心と体が休む準備を始められます。",
       effect: "夜に -30分",
-      score: gap * 2 + (level === "over" ? 2 : 0),
+      score: leisure * 1.6 + (level === "over" ? 2 : 0),
+    },
+    {
+      key: "balance",
+      title: "息抜きと集中のバランスを見る",
+      tone: "lavender",
+      reason: `息抜き ${leisure.toFixed(1)}時間 / 集中 ${focus.toFixed(1)}時間。息抜きが多めなら、少しだけ切り替えを。`,
+      step: "「見る」から「する」へ。散歩やお茶など、画面から離れる時間をひとつ足してみよう。",
+      effect: "バランスを整える",
+      score: leisure - focus,
     },
     {
       key: "worstday",
@@ -71,7 +119,7 @@ function buildAnalysis(weekly: number[], today: number, goal: number) {
       reason: `${DAY_LABELS[worstIdx]}曜が ${worstVal.toFixed(1)}時間 と、今週いちばん長め。`,
       step: `${DAY_LABELS[worstIdx]}の夕方に散歩やお茶など、画面から離れる予定をひとつ入れてみよう。`,
       effect: "ピークをならす",
-      score: swing * 2,
+      score: (Math.max(...weekly) - Math.min(...weekly)) * 1.5,
     },
     {
       key: "weekend",
@@ -81,15 +129,6 @@ function buildAnalysis(weekly: number[], today: number, goal: number) {
       step: "休みの日の朝、最初の1時間はスマホを見ずにゆっくり過ごしてみよう。",
       effect: "週末に -45分",
       score: (weekendAvg - weekdayAvg) * 3,
-    },
-    {
-      key: "notify",
-      title: "通知をおやすみモードに",
-      tone: "mint",
-      reason: `平均 ${avg.toFixed(1)}時間。無意識に開く回数が多いのかもしれません。`,
-      step: "集中したい時間帯だけ通知をオフに。開くきっかけそのものを減らせます。",
-      effect: "開く回数を減らす",
-      score: avg * 0.7,
     },
     {
       key: "morning",
@@ -127,13 +166,12 @@ function buildAnalysis(weekly: number[], today: number, goal: number) {
         : "少しずつ整えていこう"
   const trendText =
     trend === "improving" ? "だんだん減ってきているよ" : trend === "worsening" ? "少し増え気味かも" : "落ち着いたリズム"
-  const summary = `今週の平均は ${avg.toFixed(1)}時間。${
-    gap <= 0 ? "目標を上手に守れているよ" : `目標まであと ${gap.toFixed(1)}時間`
-  }。傾向は${trendText}。あなたのデータに合わせて、下の習慣を選びました。`
+  const summary = `今日は合計 ${today.toFixed(1)}時間。そのうち ${topCat.label} が ${topVal.toFixed(1)}時間 といちばん長めでした。傾向は${trendText}。あなたの使い方に合わせて、下の習慣を選びました。`
   const trendLabel = trend === "improving" ? "↓ 改善中" : trend === "worsening" ? "↑ 増加ぎみ" : "→ 安定"
-  const achievement = Math.min(100, (goal / avg) * 100)
+  const achievement = Math.min(100, (goal / Math.max(today, 0.1)) * 100)
+  const parts = CATEGORIES.map(c => ({ ...c, value: breakdown[c.key] || 0, share: today > 0 ? (breakdown[c.key] / today) * 100 : 0 }))
 
-  return { avg, gap, level, trend, trendLabel, worstIdx, worstVal, headline, summary, habits, achievement }
+  return { today, leisure, focus, topCat, topVal, avg, gap, level, trend, trendLabel, worstIdx, worstVal, headline, summary, habits, achievement, parts }
 }
 
 function Mascot({ expression, className = "" }: { expression: Expression; className?: string }) {
@@ -142,11 +180,12 @@ function Mascot({ expression, className = "" }: { expression: Expression; classN
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<TabId>("record")
-  const [screenTime, setScreenTime] = useState(4.5)
+  const [breakdown, setBreakdown] = useState<Breakdown>(DEFAULT_BREAKDOWN)
   const [goal, setGoal] = useState(3)
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedTip, setSelectedTip] = useState<number | null>(null)
   const [mascotReacting, setMascotReacting] = useState(false)
+  const screenTime = useMemo(() => CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0), [breakdown])
   const over = screenTime - goal
   const goalMet = over <= 0
   // 目標を超えたら怒り顔、達成できたら笑顔
@@ -155,7 +194,8 @@ export default function HomePage() {
     activeTab === "ai" && analyzing ? "thinking"
     : activeTab === "profile" ? "relaxed"
     : moodByGoal
-  const analysis = useMemo(() => buildAnalysis(WEEKLY, screenTime, goal), [screenTime, goal])
+  const analysis = useMemo(() => buildAnalysis(WEEKLY, breakdown, goal), [breakdown, goal])
+  const setCat = (key: CatKey, value: number) => setBreakdown(prev => ({ ...prev, [key]: Math.max(0, value || 0) }))
   const analyze = () => { setActiveTab("ai"); setAnalyzing(true); window.setTimeout(() => setAnalyzing(false), 1300) }
   const switchTab = (id: TabId) => { setActiveTab(id); setSelectedTip(null); setMascotReacting(true); window.setTimeout(() => setMascotReacting(false), 450) }
   return <main className="app-shell"><div className="phone-content">
@@ -163,14 +203,20 @@ export default function HomePage() {
     <div className="page-title"><div><p className="eyebrow">YOUR LITTLE SPACE</p><h1>{activeTab === "record" ? <>今日の時間を<br /><span>教えてね</span></> : tabs.find(tab => tab.id === activeTab)?.label}</h1></div><div className="mascot-blend"><Mascot expression={expression} className={`tiny-mascot ${mascotReacting ? "mascot-tapped" : ""}`} /></div></div>
     {activeTab === "home" && <section className="section-block home-page"><div className="welcome-card"><div><p className="eyebrow">GOOD MORNING</p><h2>今日も自分に<br /><span>やさしくね。</span></h2><p>モコモコと一緒に<br />心地よい一日をはじめよう。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div><div className="home-summary"><p className="eyebrow">TODAY&apos;S SUMMARY</p><h2>まだ記録がありません</h2><p>時間を入力すると、あなたの一日がここにまとまります。</p><button className="primary-button" onClick={() => switchTab("record")}>時間を入力する <Clock3 size={18} /></button></div></section>}
     {activeTab === "profile" && <section className="section-block profile-page"><div className="profile-card"><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /><div><p className="eyebrow">MY LITTLE SPACE</p><h2>わたしのページ</h2><p>無理なく、少しずつ。<br />あなたのペースで整えていこう。</p></div></div><div className="profile-list"><div><span>今週の記録</span><strong>0日</strong></div><div><span>覚えておきたいヒント</span><strong>0個</strong></div></div></section>}
-    {activeTab === "record" && <section className="section-block"><div className="welcome-card"><div><p className="eyebrow">MOCOMO&apos;S NOTE</p><h2>今日もやさしく、<br /><span>記録してみよう。</span></h2><p>モコモコと一緒に、あなたの<br />時間を見つめてみよう。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div><div className="input-grid"><label className="input-card" htmlFor="screen-time">スクリーンタイム<div className="number-input"><input id="screen-time" type="number" min="0" max="24" step=".5" value={screenTime} onChange={e => setScreenTime(Number(e.target.value))} /><span>時間</span></div></label><label className="input-card" htmlFor="goal-time">目標にしたい時間<div className="number-input"><input id="goal-time" type="number" min="0" max="24" step=".5" value={goal} onChange={e => setGoal(Number(e.target.value))} /><span>時間</span></div></label></div><button className="primary-button" onClick={analyze}>AIに分析してもらう <Sparkles size={18} /></button></section>}
-    {activeTab === "visual" && <section className="section-block"><p className="eyebrow">YOUR RHYTHM</p><h2>スクリーンタイムの見える化</h2><div className="chart-card"><div className="ring-wrap"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime}</strong><span>時間</span></div></div><small>今日のスクリーンタイム</small></div><div className="chart-bars">{WEEKLY.map((value, i) => <div className="bar-column" key={i}><div className="bar-track"><div className="bar-fill" style={{height: `${value * 13}%`}} /></div><span>{DAY_LABELS[i]}</span></div>)}</div></div><p className="soft-note">目標まであと <strong>{Math.max(0, goal - screenTime).toFixed(1)}時間</strong>。あなたのペースで大丈夫。</p></section>}
+    {activeTab === "record" && <section className="section-block"><div className="welcome-card"><div><p className="eyebrow">MOCOMO&apos;S NOTE</p><h2>今日はなにに<br /><span>使ったかな？</span></h2><p>カテゴリごとに分けると、<br />使い方がもっと見えてくるよ。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div>
+      <div className="cat-inputs">{CATEGORIES.map(cat => <label className="cat-input" key={cat.key} htmlFor={`cat-${cat.key}`}><span className="cat-dot" style={{background: cat.color}} /><span className="cat-name"><strong>{cat.label}</strong><small>{cat.note}</small></span><div className="cat-number"><input id={`cat-${cat.key}`} type="number" min="0" max="24" step=".5" value={breakdown[cat.key]} onChange={e => setCat(cat.key, Number(e.target.value))} /><span>h</span></div></label>)}</div>
+      <div className="cat-total"><span>合計スクリーンタイム</span><strong>{screenTime.toFixed(1)}時間</strong></div>
+      <label className="input-card goal-row" htmlFor="goal-time">目標にしたい時間<div className="number-input"><input id="goal-time" type="number" min="0" max="24" step=".5" value={goal} onChange={e => setGoal(Number(e.target.value))} /><span>時間</span></div></label>
+      <button className="primary-button" onClick={analyze}>AIに分析してもらう <Sparkles size={18} /></button></section>}
+    {activeTab === "visual" && <section className="section-block"><p className="eyebrow">YOUR RHYTHM</p><h2>スクリーンタイムの見える化</h2><div className="chart-card"><div className="ring-wrap"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime.toFixed(1)}</strong><span>時間</span></div></div><small>今日のスクリーンタイム</small></div><div className="chart-bars">{WEEKLY.map((value, i) => <div className="bar-column" key={i}><div className="bar-track"><div className="bar-fill" style={{height: `${value * 13}%`}} /></div><span>{DAY_LABELS[i]}</span></div>)}</div></div>
+      <div className="cat-breakdown"><p className="eyebrow">BY CATEGORY</p><h3 className="cat-break-title">なにに使ったか</h3><div className="cat-stack" role="img" aria-label="カテゴリ別の内訳">{analysis.parts.filter(p => p.value > 0).map(p => <span key={p.key} className="cat-seg" style={{width: `${p.share}%`, background: p.color}} title={`${p.label} ${p.value.toFixed(1)}h`} />)}</div><div className="cat-legend">{analysis.parts.map(p => <div className="cat-legend-item" key={p.key}><span className="cat-dot" style={{background: p.color}} /><span className="cat-legend-name">{p.label}</span><span className="cat-legend-val">{p.value.toFixed(1)}h</span></div>)}</div></div>
+      <p className="soft-note">目標まであと <strong>{Math.max(0, goal - screenTime).toFixed(1)}時間</strong>。あなたのペースで大丈夫。</p></section>}
     {activeTab === "ai" && <section className={`analysis-page ${analyzing ? "is-analyzing" : ""}`}>
       {analyzing ? <>
         <Mascot expression="thinking" className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} />
         <p className="eyebrow">MOCOMO&apos;S INSIGHT</p>
         <h2>あなたの時間を見ています…</h2>
-        <p>今日の記録と1週間の流れから、あなたに合うヒントを探しています。</p>
+        <p>カテゴリごとの使い方と1週間の流れから、あなたに合うヒントを探しています。</p>
         <div className="analysis-loader" aria-hidden="true"><span /><span /><span /></div>
       </> : <div className="ai-result">
         <div className="ai-diagnosis">
@@ -179,11 +225,11 @@ export default function HomePage() {
           <p>{analysis.summary}</p>
         </div>
         <div className="ai-stats">
-          <div className="ai-stat"><small>今週の平均</small><strong>{analysis.avg.toFixed(1)}h</strong></div>
-          <div className="ai-stat"><small>傾向</small><strong>{analysis.trendLabel}</strong></div>
-          <div className="ai-stat"><small>いちばん長い日</small><strong>{DAY_LABELS[analysis.worstIdx]} {analysis.worstVal.toFixed(1)}h</strong></div>
+          <div className="ai-stat"><small>今日の合計</small><strong>{analysis.today.toFixed(1)}h</strong></div>
+          <div className="ai-stat"><small>いちばん長い</small><strong>{analysis.topCat.label} {analysis.topVal.toFixed(1)}h</strong></div>
+          <div className="ai-stat"><small>息抜き / 集中</small><strong>{analysis.leisure.toFixed(1)} / {analysis.focus.toFixed(1)}h</strong></div>
         </div>
-        <div className="insight-meter"><span style={{width: `${analysis.achievement}%`}} /></div>
+        <div className="cat-stack ai-cat-stack" role="img" aria-label="カテゴリ別の内訳">{analysis.parts.filter(p => p.value > 0).map(p => <span key={p.key} className="cat-seg" style={{width: `${p.share}%`, background: p.color}} title={`${p.label} ${p.value.toFixed(1)}h`} />)}</div>
         <h3 className="rec-head-title">あなたに合わせた3つの習慣</h3>
         <div className="rec-list">{analysis.habits.map(habit => <div key={habit.key} className={`rec-card ${habit.tone}`}>
           <div className="rec-top"><strong>{habit.title}</strong><span className="rec-effect">{habit.effect}</span></div>
