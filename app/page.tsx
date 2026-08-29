@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { BarChart3, Check, ChevronRight, Clock3, Home, Lightbulb, RefreshCw, Sparkles, Smartphone, UserRound, WandSparkles } from "lucide-react"
+import { BarChart3, Check, ChevronRight, Clock3, Flame, Home, Lightbulb, Palette, Pencil, RefreshCw, Sparkles, Smartphone, UserRound, WandSparkles } from "lucide-react"
 import { useScreentime } from "@/components/use-screentime"
 import { ConnectPanel } from "@/components/connect-panel"
+import { usePrefs, type AvatarId, type ThemeId } from "@/components/use-prefs"
 
 const tabs = [
   { id: "home", label: "ホーム", icon: Home },
@@ -47,7 +48,6 @@ const tips = [
 type TabId = typeof tabs[number]["id"]
 type Expression = "happy" | "thinking" | "curious" | "insight" | "cheer" | "relaxed" | "worried" | "hello" | "angry"
 
-// 目標達成→笑顔、未達成→怒り、それ以外→ふだんの顔
 const MASCOT_SRC: Record<string, string> = {
   angry: "/relife-mocomo-angry.png",
   worried: "/relife-mocomo-angry.png",
@@ -58,6 +58,48 @@ function mascotImage(expression: Expression) {
   return MASCOT_SRC[expression] ?? "/relife-mocomo.png"
 }
 
+// 連続記録の日数で表情が変わる（7日以上→にこにこ / 3日〜→ふつう / はじめ→むすっ）
+function streakFace(streak: number): Expression {
+  return streak >= 7 ? "happy" : streak >= 3 ? "relaxed" : "angry"
+}
+
+// アイコン設定で選べる表情
+const AVATAR_EXPR: Record<AvatarId, Expression> = { normal: "relaxed", happy: "happy", angry: "angry" }
+const AVATARS: { id: AvatarId; label: string }[] = [
+  { id: "happy", label: "にこにこ" },
+  { id: "normal", label: "ふつう" },
+  { id: "angry", label: "むすっ" },
+]
+
+// 着せ替えカラー
+const THEMES: { id: ThemeId; label: string; color: string }[] = [
+  { id: "sakura", label: "さくら", color: "#efa0a3" },
+  { id: "mint", label: "みんと", color: "#8fccb8" },
+  { id: "lavender", label: "らべんだー", color: "#a99bd9" },
+  { id: "honey", label: "はにー", color: "#e6b568" },
+  { id: "sky", label: "そら", color: "#86b6d8" },
+]
+
+// 連続記録で表情が変わるよ、のガイド
+const FACE_GUIDE: { expr: Expression; label: string; hint: string }[] = [
+  { expr: "happy", label: "がんばり屋さん", hint: "7日つづくと" },
+  { expr: "relaxed", label: "ごきげん", hint: "3日つづくと" },
+  { expr: "angry", label: "はじめまして", hint: "スタート" },
+]
+
+// 余白に散らす草花のイラスト
+const DECOS: { src: string; style: React.CSSProperties }[] = [
+  { src: "/deco-leaf.png", style: { top: 8, left: "2%", width: 96, transform: "rotate(-12deg)" } },
+  { src: "/deco-flower-pink.png", style: { top: 74, right: "3%", width: 74, transform: "rotate(18deg)" } },
+  { src: "/deco-flower-yellow.png", style: { top: "34%", left: "1.5%", width: 66, transform: "rotate(-6deg)" } },
+  { src: "/deco-leaf.png", style: { top: "48%", right: "1.5%", width: 92, transform: "rotate(135deg)" } },
+  { src: "/deco-flower-purple.png", style: { bottom: 150, left: "3%", width: 70, transform: "rotate(14deg)" } },
+  { src: "/deco-flower-pink.png", style: { bottom: 96, right: "2.5%", width: 62, transform: "rotate(-22deg)" } },
+  { src: "/deco-flower-yellow.png", style: { top: 4, left: "45%", width: 46, opacity: 0.7, transform: "rotate(8deg)" } },
+  { src: "/deco-flower-purple.png", style: { top: "24%", right: "7%", width: 50, opacity: 0.85, transform: "rotate(-10deg)" } },
+  { src: "/deco-leaf.png", style: { bottom: 160, left: "42%", width: 66, opacity: 0.65, transform: "rotate(205deg)" } },
+]
+
 // あなたのデータから、一人ひとりに合う習慣を組み立てる仕組み
 type Rec = { key: string; title: string; reason: string; step: string; effect: string; tone: string; score: number }
 
@@ -65,7 +107,6 @@ function buildAnalysis(weekly: number[], breakdown: Breakdown, goal: number) {
   const today = CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0)
   const leisure = CATEGORIES.filter(c => c.kind === "leisure").reduce((sum, c) => sum + (breakdown[c.key] || 0), 0)
   const focus = today - leisure
-  // いちばん長い息抜きカテゴリを見つける
   const leisureCats = CATEGORIES.filter(c => c.kind === "leisure")
   const topCat = leisureCats.reduce((top, c) => (breakdown[c.key] > breakdown[top.key] ? c : top), leisureCats[0])
   const topVal = breakdown[topCat.key]
@@ -86,7 +127,6 @@ function buildAnalysis(weekly: number[], breakdown: Breakdown, goal: number) {
   const level: "good" | "close" | "over" = gap <= 0 ? "good" : gap <= 1 ? "close" : "over"
 
   const pool: Rec[] = [
-    // いちばん長い息抜きカテゴリへの提案（あなたのデータに一番効く）
     {
       key: `cat-${topCat.key}`,
       title: CAT_ADVICE[topCat.key]?.title ?? "使いすぎのアプリと少し距離を",
@@ -181,7 +221,7 @@ function Mascot({ expression, className = "" }: { expression: Expression; classN
 }
 
 export default function HomePage() {
-  const [activeTab, setActiveTab] = useState<TabId>("record")
+  const [activeTab, setActiveTab] = useState<TabId>("home")
   const [breakdown, setBreakdown] = useState<Breakdown>(DEFAULT_BREAKDOWN)
   const [goal, setGoal] = useState(3)
   const [analyzing, setAnalyzing] = useState(false)
@@ -189,10 +229,9 @@ export default function HomePage() {
   const [mascotReacting, setMascotReacting] = useState(false)
   const [edited, setEdited] = useState(false)
 
-  // スマホから同期されたスクリーンタイム
+  const { prefs, update } = usePrefs()
   const { ready, syncKey, setSyncKey, createKey, data: sync, mutate } = useScreentime()
 
-  // 同期データが届いたら（手動で編集していない限り）カテゴリに反映する
   useEffect(() => {
     if (sync?.hasData && !edited) {
       setBreakdown(prev => ({ ...prev, ...sync.breakdown } as Breakdown))
@@ -201,7 +240,6 @@ export default function HomePage() {
 
   const synced = !!(syncKey && sync?.hasData)
 
-  // 同期の週間データがあればそれを使い、なければサンプル
   const weekly = useMemo<number[]>(() => {
     if (sync?.weekly && sync.weekly.length > 0) {
       const filled = [...WEEKLY]
@@ -215,29 +253,44 @@ export default function HomePage() {
   const screenTime = useMemo(() => CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0), [breakdown])
   const over = screenTime - goal
   const goalMet = over <= 0
-  // 目標を超えたら怒り顔、達成できたら笑顔
+  const streak = prefs.streak
+
+  // 記録タブは入力の即時フィードバック（目標超過→むすっ）、ほかは連続記録で表情が決まる
   const moodByGoal: Expression = goalMet ? "happy" : "angry"
   const expression: Expression =
     activeTab === "ai" && analyzing ? "thinking"
-    : activeTab === "profile" ? "relaxed"
-    : moodByGoal
+    : activeTab === "record" ? moodByGoal
+    : streakFace(streak)
+
   const analysis = useMemo(() => buildAnalysis(weekly, breakdown, goal), [weekly, breakdown, goal])
   const setCat = (key: CatKey, value: number) => { setEdited(true); setBreakdown(prev => ({ ...prev, [key]: Math.max(0, value || 0) })) }
   const disconnect = () => { setSyncKey(null); setEdited(false); setBreakdown(DEFAULT_BREAKDOWN) }
   const resync = () => { setEdited(false); mutate() }
   const analyze = () => { setActiveTab("ai"); setAnalyzing(true); window.setTimeout(() => setAnalyzing(false), 1300) }
   const switchTab = (id: TabId) => { setActiveTab(id); setSelectedTip(null); setMascotReacting(true); window.setTimeout(() => setMascotReacting(false), 450) }
-  return <main className="app-shell"><div className="phone-content">
+
+  return <main className="app-shell" data-theme={prefs.theme}>
+    <div className="deco" aria-hidden="true">{DECOS.map((d, i) => <img key={i} src={d.src || "/placeholder.svg"} alt="" style={d.style} />)}</div>
+    <div className="phone-content">
     <header className="topbar"><div className="brand-mark"><span>Re:</span>LIFE</div><button className={`status-pill ${goalMet ? "ok" : "over"}`} onClick={() => switchTab("visual")} aria-label="今日のスクリーンタイムを見る"><Clock3 size={14} /><strong>{screenTime.toFixed(1)}h</strong><span>/ {goal}h</span></button></header>
     {activeTab !== "home" && activeTab !== "profile" && activeTab !== "record" && <div className="page-title"><div><p className="eyebrow">YOUR LITTLE SPACE</p><h1>{tabs.find(tab => tab.id === activeTab)?.label}</h1></div><div className="mascot-blend"><Mascot expression={expression} className={`tiny-mascot ${mascotReacting ? "mascot-tapped" : ""}`} /></div></div>}
     {activeTab === "home" && <section className="section-block home-page">
-      <div className="welcome-card"><div><p className="eyebrow">GOOD MORNING</p><h2>今日も自分に<br /><span>やさしくね。</span></h2><p>モコモコと一緒に<br />心地よい一日をはじめよう。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div>
+      <div className="welcome-card"><div><p className="eyebrow">GOOD MORNING</p><h2>今日も自分に<br /><span>やさしくね。</span></h2><p>モコモコと一緒に<br />心地よい一日をはじめよう。</p></div><span className="streak-ribbon"><Flame size={13} />連続 {streak} 日目！</span><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div>
       <div className="today-card"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime.toFixed(1)}</strong><span>時間</span></div></div><div className="today-info"><p className="eyebrow">TODAY</p><h3>{goalMet ? "目標のなかで過ごせています" : `目標まであと ${Math.max(0, screenTime - goal).toFixed(1)}時間`}</h3><p className="today-sub">いちばんは {analysis.topCat.label}・{analysis.topVal.toFixed(1)}時間</p><span className={`today-flag ${goalMet ? "ok" : "over"}`}>{goalMet ? <><Check size={12} />目標達成</> : "目標オーバー"}</span></div></div>
+      <div className="face-guide"><p className="eyebrow">連続記録で表情が変わるよ</p><div className="face-guide-row">{FACE_GUIDE.map(f => <div className={`face-guide-item ${streakFace(streak) === f.expr ? "on" : ""}`} key={f.label}><Mascot expression={f.expr} className="face-guide-mascot" /><strong>{f.label}</strong><small>{f.hint}</small></div>)}</div></div>
       <div className="mini-stats"><button onClick={() => switchTab("visual")}><small>週平均</small><strong>{analysis.avg.toFixed(1)}h</strong></button><button onClick={() => switchTab("visual")}><small>傾向</small><strong>{analysis.trendLabel}</strong></button><button onClick={() => switchTab("record")}><small>目標</small><strong>{goal}h</strong></button></div>
       <div className="cat-breakdown"><p className="eyebrow">BY CATEGORY</p><h3 className="cat-break-title">なにに使ったか</h3><div className="cat-stack" role="img" aria-label="カテゴリ別の内訳">{analysis.parts.filter(p => p.value > 0).map(p => <span key={p.key} className="cat-seg" style={{width: `${p.share}%`, background: p.color}} title={`${p.label} ${p.value.toFixed(1)}h`} />)}</div><div className="cat-legend">{analysis.parts.map(p => <div className="cat-legend-item" key={p.key}><span className="cat-dot" style={{background: p.color}} /><span className="cat-legend-name">{p.label}</span><span className="cat-legend-val">{p.value.toFixed(1)}h</span></div>)}</div></div>
       <div className="home-actions"><button className="primary-button" onClick={() => switchTab("record")}>時間を入力する <Clock3 size={18} /></button><button className="ghost-button" onClick={analyze}>AIに分析してもらう <Sparkles size={18} /></button></div>
     </section>}
-    {activeTab === "profile" && <section className="section-block profile-page"><div className="profile-card"><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /><div><p className="eyebrow">MY LITTLE SPACE</p><h2>わたしのページ</h2><p>無理なく、少しずつ。<br />あなたのペースで整えていこう。</p></div></div><div className="profile-list"><div><span>今週の記録</span><strong>{sync?.weekly?.length ?? 0}日</strong></div><div><span>スマホ同期</span><strong>{synced ? "オン" : "オフ"}</strong></div></div>
+    {activeTab === "profile" && <section className="section-block profile-page">
+      <div className="profile-card"><div className="profile-avatar"><Mascot expression={AVATAR_EXPR[prefs.avatar]} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div><div><p className="eyebrow">MY LITTLE SPACE</p><h2>{prefs.name}</h2><p>無理なく、少しずつ。<br />あなたのペースで整えていこう。</p></div></div>
+      <div className="profile-list"><div><span>連続記録</span><strong>{streak}日</strong></div><div><span>スマホ同期</span><strong>{synced ? "オン" : "オフ"}</strong></div></div>
+      <div className="setting-grid">
+        <div className="setting-card streak-card"><div className="set-head"><Flame size={16} /><span>連続記録</span></div><strong className="streak-big">{streak}<em>日目！</em></strong><small>{streak >= 7 ? "その調子！" : "毎日ひらいて続けよう"}</small></div>
+        <div className="setting-card"><div className="set-head"><Pencil size={15} /><span>名前の設定</span></div><input className="name-input" value={prefs.name} maxLength={12} onChange={e => update({ name: e.target.value })} aria-label="名前" placeholder="なまえ" /></div>
+        <div className="setting-card"><div className="set-head"><UserRound size={15} /><span>アイコン設定</span></div><div className="avatar-picker">{AVATARS.map(a => <button key={a.id} className={`avatar-opt ${prefs.avatar === a.id ? "on" : ""}`} onClick={() => update({ avatar: a.id })} aria-label={a.label} aria-pressed={prefs.avatar === a.id}><Mascot expression={AVATAR_EXPR[a.id]} className="avatar-mini" /></button>)}</div></div>
+        <div className="setting-card"><div className="set-head"><Palette size={15} /><span>着せ替え</span></div><div className="theme-picker">{THEMES.map(t => <button key={t.id} className={`swatch ${prefs.theme === t.id ? "on" : ""}`} onClick={() => update({ theme: t.id })} style={{ background: t.color }} aria-label={t.label} aria-pressed={prefs.theme === t.id}>{prefs.theme === t.id ? <Check size={14} /> : null}</button>)}</div></div>
+      </div>
       {ready && <ConnectPanel syncKey={syncKey} createKey={createKey} data={sync} onDisconnect={disconnect} onRefresh={resync} />}</section>}
     {activeTab === "record" && <section className="section-block"><div className="welcome-card"><div><p className="eyebrow">MOCOMO&apos;S NOTE</p><h2>今日はなにに<br /><span>使ったかな？</span></h2><p>カテゴリごとに分けると、<br />使い方がもっと見えてくるよ。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div>
       <div className="cat-inputs">{CATEGORIES.map(cat => <label className="cat-input" key={cat.key} htmlFor={`cat-${cat.key}`}><span className="cat-dot" style={{background: cat.color}} /><span className="cat-name"><strong>{cat.label}</strong><small>{cat.note}</small></span><div className="cat-number"><input id={`cat-${cat.key}`} type="number" min="0" max="24" step=".5" value={breakdown[cat.key]} onChange={e => setCat(cat.key, Number(e.target.value))} /><span>h</span></div></label>)}</div>
