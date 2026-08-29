@@ -1,7 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { BarChart3, Check, ChevronRight, Clock3, Heart, Home, Lightbulb, Sparkles, UserRound, WandSparkles } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { BarChart3, Check, ChevronRight, Clock3, Heart, Home, Lightbulb, RefreshCw, Sparkles, Smartphone, UserRound, WandSparkles } from "lucide-react"
+import { useScreentime } from "@/components/use-screentime"
+import { ConnectPanel } from "@/components/connect-panel"
 
 const tabs = [
   { id: "home", label: "ホーム", icon: Home },
@@ -185,6 +187,31 @@ export default function HomePage() {
   const [analyzing, setAnalyzing] = useState(false)
   const [selectedTip, setSelectedTip] = useState<number | null>(null)
   const [mascotReacting, setMascotReacting] = useState(false)
+  const [edited, setEdited] = useState(false)
+
+  // スマホから同期されたスクリーンタイム
+  const { ready, syncKey, setSyncKey, createKey, data: sync, mutate } = useScreentime()
+
+  // 同期データが届いたら（手動で編集していない限り）カテゴリに反映する
+  useEffect(() => {
+    if (sync?.hasData && !edited) {
+      setBreakdown(prev => ({ ...prev, ...sync.breakdown } as Breakdown))
+    }
+  }, [sync, edited])
+
+  const synced = !!(syncKey && sync?.hasData)
+
+  // 同期の週間データがあればそれを使い、なければサンプル
+  const weekly = useMemo<number[]>(() => {
+    if (sync?.weekly && sync.weekly.length > 0) {
+      const filled = [...WEEKLY]
+      const recent = sync.weekly.slice(-7).map(w => w.hours)
+      for (let i = 0; i < recent.length; i++) filled[filled.length - recent.length + i] = recent[i]
+      return filled
+    }
+    return WEEKLY
+  }, [sync])
+
   const screenTime = useMemo(() => CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0), [breakdown])
   const over = screenTime - goal
   const goalMet = over <= 0
@@ -194,21 +221,26 @@ export default function HomePage() {
     activeTab === "ai" && analyzing ? "thinking"
     : activeTab === "profile" ? "relaxed"
     : moodByGoal
-  const analysis = useMemo(() => buildAnalysis(WEEKLY, breakdown, goal), [breakdown, goal])
-  const setCat = (key: CatKey, value: number) => setBreakdown(prev => ({ ...prev, [key]: Math.max(0, value || 0) }))
+  const analysis = useMemo(() => buildAnalysis(weekly, breakdown, goal), [weekly, breakdown, goal])
+  const setCat = (key: CatKey, value: number) => { setEdited(true); setBreakdown(prev => ({ ...prev, [key]: Math.max(0, value || 0) })) }
+  const disconnect = () => { setSyncKey(null); setEdited(false); setBreakdown(DEFAULT_BREAKDOWN) }
+  const resync = () => { setEdited(false); mutate() }
   const analyze = () => { setActiveTab("ai"); setAnalyzing(true); window.setTimeout(() => setAnalyzing(false), 1300) }
   const switchTab = (id: TabId) => { setActiveTab(id); setSelectedTip(null); setMascotReacting(true); window.setTimeout(() => setMascotReacting(false), 450) }
   return <main className="app-shell"><div className="phone-content">
     <header className="topbar"><div className="brand-mark"><span>Re:</span>LIFE</div><button className="round-button" aria-label="お気に入り"><Heart size={18} /></button></header>
     <div className="page-title"><div><p className="eyebrow">YOUR LITTLE SPACE</p><h1>{activeTab === "record" ? <>今日の時間を<br /><span>教えてね</span></> : tabs.find(tab => tab.id === activeTab)?.label}</h1></div><div className="mascot-blend"><Mascot expression={expression} className={`tiny-mascot ${mascotReacting ? "mascot-tapped" : ""}`} /></div></div>
     {activeTab === "home" && <section className="section-block home-page"><div className="welcome-card"><div><p className="eyebrow">GOOD MORNING</p><h2>今日も自分に<br /><span>やさしくね。</span></h2><p>モコモコと一緒に<br />心地よい一日をはじめよう。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div><div className="home-summary"><p className="eyebrow">TODAY&apos;S SUMMARY</p><h2>まだ記録がありません</h2><p>時間を入力すると、あなたの一日がここにまとまります。</p><button className="primary-button" onClick={() => switchTab("record")}>時間を入力する <Clock3 size={18} /></button></div></section>}
-    {activeTab === "profile" && <section className="section-block profile-page"><div className="profile-card"><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /><div><p className="eyebrow">MY LITTLE SPACE</p><h2>わたしのページ</h2><p>無理なく、少しずつ。<br />あなたのペースで整えていこう。</p></div></div><div className="profile-list"><div><span>今週の記録</span><strong>0日</strong></div><div><span>覚えておきたいヒント</span><strong>0個</strong></div></div></section>}
+    {activeTab === "profile" && <section className="section-block profile-page"><div className="profile-card"><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /><div><p className="eyebrow">MY LITTLE SPACE</p><h2>わたしのページ</h2><p>無理なく、少しずつ。<br />あなたのペースで整えていこう。</p></div></div><div className="profile-list"><div><span>今週の記録</span><strong>{sync?.weekly?.length ?? 0}日</strong></div><div><span>スマホ同期</span><strong>{synced ? "オン" : "オフ"}</strong></div></div>
+      {ready && <ConnectPanel syncKey={syncKey} createKey={createKey} data={sync} onDisconnect={disconnect} onRefresh={resync} />}</section>}
     {activeTab === "record" && <section className="section-block"><div className="welcome-card"><div><p className="eyebrow">MOCOMO&apos;S NOTE</p><h2>今日はなにに<br /><span>使ったかな？</span></h2><p>カテゴリごとに分けると、<br />使い方がもっと見えてくるよ。</p></div><Mascot expression={expression} className={`mascot-art ${mascotReacting ? "mascot-tapped" : ""}`} /></div>
       <div className="cat-inputs">{CATEGORIES.map(cat => <label className="cat-input" key={cat.key} htmlFor={`cat-${cat.key}`}><span className="cat-dot" style={{background: cat.color}} /><span className="cat-name"><strong>{cat.label}</strong><small>{cat.note}</small></span><div className="cat-number"><input id={`cat-${cat.key}`} type="number" min="0" max="24" step=".5" value={breakdown[cat.key]} onChange={e => setCat(cat.key, Number(e.target.value))} /><span>h</span></div></label>)}</div>
       <div className="cat-total"><span>合計スクリーンタイム</span><strong>{screenTime.toFixed(1)}時間</strong></div>
+      {synced ? <button type="button" className="sync-badge" onClick={resync}><Smartphone size={14} /><span>スマホと同期中{edited ? "（手動で編集ずみ）" : ""}</span><RefreshCw size={13} /></button>
+        : <button type="button" className="sync-badge muted" onClick={() => switchTab("profile")}><Smartphone size={14} /><span>スマホのスクリーンタイムと同期する</span><ChevronRight size={14} /></button>}
       <label className="input-card goal-row" htmlFor="goal-time">目標にしたい時間<div className="number-input"><input id="goal-time" type="number" min="0" max="24" step=".5" value={goal} onChange={e => setGoal(Number(e.target.value))} /><span>時間</span></div></label>
       <button className="primary-button" onClick={analyze}>AIに分析してもらう <Sparkles size={18} /></button></section>}
-    {activeTab === "visual" && <section className="section-block"><p className="eyebrow">YOUR RHYTHM</p><h2>スクリーンタイムの見える化</h2><div className="chart-card"><div className="ring-wrap"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime.toFixed(1)}</strong><span>時間</span></div></div><small>今日のスクリーンタイム</small></div><div className="chart-bars">{WEEKLY.map((value, i) => <div className="bar-column" key={i}><div className="bar-track"><div className="bar-fill" style={{height: `${value * 13}%`}} /></div><span>{DAY_LABELS[i]}</span></div>)}</div></div>
+    {activeTab === "visual" && <section className="section-block"><p className="eyebrow">YOUR RHYTHM</p><h2>スクリーンタイムの見える化</h2><div className="chart-card"><div className="ring-wrap"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime.toFixed(1)}</strong><span>時間</span></div></div><small>今日のスクリーンタイム</small></div><div className="chart-bars">{weekly.map((value, i) => <div className="bar-column" key={i}><div className="bar-track"><div className="bar-fill" style={{height: `${value * 13}%`}} /></div><span>{DAY_LABELS[i]}</span></div>)}</div></div>
       <div className="cat-breakdown"><p className="eyebrow">BY CATEGORY</p><h3 className="cat-break-title">なにに使ったか</h3><div className="cat-stack" role="img" aria-label="カテゴリ別の内訳">{analysis.parts.filter(p => p.value > 0).map(p => <span key={p.key} className="cat-seg" style={{width: `${p.share}%`, background: p.color}} title={`${p.label} ${p.value.toFixed(1)}h`} />)}</div><div className="cat-legend">{analysis.parts.map(p => <div className="cat-legend-item" key={p.key}><span className="cat-dot" style={{background: p.color}} /><span className="cat-legend-name">{p.label}</span><span className="cat-legend-val">{p.value.toFixed(1)}h</span></div>)}</div></div>
       <p className="soft-note">目標まであと <strong>{Math.max(0, goal - screenTime).toFixed(1)}時間</strong>。あなたのペースで大丈夫。</p></section>}
     {activeTab === "ai" && <section className={`analysis-page ${analyzing ? "is-analyzing" : ""}`}>

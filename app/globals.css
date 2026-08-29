@@ -54,3 +54,28 @@
 .rec-card.pink .rec-step{color:#977c82}
 .rec-card.lavender .rec-step{color:#7d76a0}
 .rec-cta{margin-top:18px;display:flex;align-items:center;justify-content:center;gap:6px}
+.connect-card{margin-top:16px;padding:20px;border-radius:26px;background:#fff;border:1px solid var(--border);box-shadow:0 10px 26px #e7c3bd33}
+.connect-hero{display:flex;align-items:center;gap:12px;margin-bottom:13px}
+.connect-hero>svg{color:#e3838c;flex:none}
+.connect-hero h3{margin:2px 0 0;color:#63515a;font:500 17px 'Kiwi Maru',sans-serif}
+.connect-dot{width:12px;height:12px;border-radius:50%;background:#e2cfd3;flex:none}
+.connect-dot.on{background:#8fccb8;box-shadow:0 0 0 4px #8fccb833}
+.connect-refresh{margin-left:auto;border:1px solid var(--border);background:#fff6f3;color:#c98088;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.connect-lead{color:#846d75;font-size:12.5px;line-height:1.8;margin:0 0 15px}
+.copy-field{display:flex;align-items:stretch;gap:8px;margin-bottom:10px}
+.copy-field-body{flex:1;min-width:0;background:#faf1ee;border:1px solid var(--border);border-radius:16px;padding:9px 13px}
+.copy-field-body small{display:block;color:#a99097;font-size:9px;letter-spacing:.04em;margin-bottom:3px}
+.copy-field-body code{display:block;color:#6b5a62;font-size:12px;line-height:1.6;word-break:break-all;white-space:pre-wrap;font-family:ui-monospace,monospace}
+.copy-field>button{flex:none;width:42px;border:1px solid var(--border);background:#fff0ec;color:#d98088;border-radius:16px;display:flex;align-items:center;justify-content:center}
+.connect-steps{margin-top:18px;padding-top:16px;border-top:1px dashed var(--border)}
+.connect-steps ol{margin:11px 0 14px;padding-left:20px;display:grid;gap:8px}
+.connect-steps li{color:#7c6a72;font-size:12px;line-height:1.7}
+.connect-steps strong{color:#c76e78;font-weight:800}
+.connect-hint{color:#a18e94;font-size:10.5px;line-height:1.7;margin:10px 0 0}
+.connect-hint code{background:#faf1ee;border-radius:6px;padding:1px 5px;font-size:10px}
+.connect-unlink{margin-top:16px;width:100%;border:0;background:transparent;color:#bfa4ab;font-size:11.5px;text-decoration:underline;padding:6px}
+.sync-badge{margin-top:11px;width:100%;display:flex;align-items:center;gap:9px;padding:12px 15px;border-radius:16px;border:1px solid #d8ecd9;background:#eef8f1;color:#5e9b8c;font-size:12px;font-weight:700}
+.sync-badge svg:last-child{margin-left:auto;flex:none}
+.sync-badge svg:first-child{flex:none}
+.sync-badge span{text-align:left}
+.sync-badge.muted{border-color:var(--border);background:#fff6f3;color:#c07f88}
