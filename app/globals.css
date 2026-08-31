@@ -159,3 +159,28 @@
 .theme-picker{display:flex;flex-wrap:wrap;gap:9px}
 .swatch{width:34px;height:34px;border-radius:50%;border:2px solid #fff;display:grid;place-items:center;color:#fff;box-shadow:0 0 0 1px #0000000f,0 3px 8px #d9b7b73d}
 .swatch.on{box-shadow:0 0 0 2px var(--accent),0 3px 8px #d9b7b73d}
+/* アイコン：写真アップロード */
+.avatar-photo>img{border-radius:inherit;object-fit:cover}
+.avatar-photo-mini{object-fit:cover;border-radius:14px}
+.avatar-upload{flex-direction:column;gap:2px;cursor:pointer;color:var(--accent);font-size:9px;font-weight:800;border-style:dashed}
+.avatar-upload svg{opacity:.9}
+/* 覚えておきたいこと：ホームのウィジェット風カード */
+.reminder-widget{position:relative;overflow:hidden;padding:16px;border-radius:26px;background:linear-gradient(135deg,var(--primary),var(--accent));box-shadow:0 14px 30px #d99aa04d;color:#fff}
+.reminder-widget .rw-glass{background:#ffffff26;border:1px solid #ffffff40;border-radius:20px;padding:14px 15px;backdrop-filter:blur(6px)}
+.rw-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.rw-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;background:#ffffff33;padding:4px 10px;border-radius:999px}
+.rw-time{font-size:10px;font-weight:700;opacity:.85}
+.rw-title{display:block;font:500 16px/1.4 'Kiwi Maru',sans-serif;margin-bottom:4px}
+.rw-detail{margin:0;font-size:11.5px;line-height:1.65;opacity:.92}
+.rw-actions{display:flex;gap:8px;margin-top:11px}
+.rw-open{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;border:0;border-radius:14px;padding:11px;background:#fff;color:var(--accent);font-weight:800;font-size:12.5px}
+.rw-remove{flex:none;width:42px;border:0;border-radius:14px;background:#ffffff2e;color:#fff;display:grid;place-items:center}
+.rw-note{display:flex;align-items:flex-start;gap:5px;margin:11px 2px 0;font-size:10px;line-height:1.6;opacity:.9}
+.rw-note svg{flex:none;margin-top:1px}
+/* 改善方法：保存状態 */
+.tips-hint{display:flex;align-items:center;gap:6px;margin:-4px 0 4px;color:var(--accent);font-size:11.5px;font-weight:700}
+.tips-hint svg{flex:none}
+.habit-card.saved{box-shadow:inset 0 0 0 1.5px var(--primary)}
+.habit-card.saved .habit-check{color:var(--accent)}
+.tip-save{display:flex;align-items:center;justify-content:center;gap:6px}
+.tip-save.saved{background:var(--hero-b)!important;color:var(--accent)!important}

@@ -3,19 +3,33 @@
 import { useEffect, useState } from "react"
 
 export type ThemeId = "sakura" | "mint" | "lavender" | "honey" | "sky"
-export type AvatarId = "normal" | "happy" | "angry"
+export type AvatarId = "normal" | "happy" | "angry" | "custom"
+
+export type SavedTip = { title: string; detail: string }
 
 export type Prefs = {
   name: string
   avatar: AvatarId
+  customAvatar: string // アップロードした写真（data URL）
   theme: ThemeId
   streak: number
+  bestStreak: number
   lastCheckIn: string // YYYY-MM-DD
+  savedTips: SavedTip[]
 }
 
 const KEY = "relife-prefs-v1"
 
-const DEFAULTS: Prefs = { name: "あなた", avatar: "normal", theme: "sakura", streak: 1, lastCheckIn: "" }
+const DEFAULTS: Prefs = {
+  name: "あなた",
+  avatar: "normal",
+  customAvatar: "",
+  theme: "sakura",
+  streak: 1,
+  bestStreak: 1,
+  lastCheckIn: "",
+  savedTips: [],
+}
 
 function todayStr() {
   const d = new Date()
@@ -34,7 +48,7 @@ export function usePrefs() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULTS)
   const [ready, setReady] = useState(false)
 
-  // 読み込み時に連続記録を判定して更新（今日を自動チェックイン）
+  // アプリを開くたびに連続記録を判定して更新（今日を自動チェックイン）
   useEffect(() => {
     let base = DEFAULTS
     try {
@@ -48,14 +62,15 @@ export function usePrefs() {
     } else {
       const diff = daysBetween(base.lastCheckIn, today)
       if (diff === 0) {
-        // 今日はもうチェックイン済み
+        // 今日はもうチェックイン済み。連続日数は変えない
       } else if (diff === 1) {
-        streak = streak + 1 // 昨日も続いていた → 連続日数+1
+        streak = streak + 1 // 昨日も開いていた → 連続日数+1
       } else if (diff > 1) {
         streak = 1 // 間があいた → リセット
       }
     }
-    const next = { ...base, streak, lastCheckIn: today }
+    const bestStreak = Math.max(base.bestStreak || 1, streak)
+    const next = { ...base, streak, bestStreak, lastCheckIn: today }
     setPrefs(next)
     setReady(true)
     try { localStorage.setItem(KEY, JSON.stringify(next)) } catch {}
@@ -69,5 +84,16 @@ export function usePrefs() {
     })
   }
 
-  return { prefs, ready, update }
+  // ヒントの保存トグル（同じタイトルがあれば外す）
+  const toggleTip = (tip: SavedTip) => {
+    setPrefs(prev => {
+      const exists = prev.savedTips.some(t => t.title === tip.title)
+      const savedTips = exists ? prev.savedTips.filter(t => t.title !== tip.title) : [...prev.savedTips, tip]
+      const next = { ...prev, savedTips }
+      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  return { prefs, ready, update, toggleTip }
 }
