@@ -1,11 +1,22 @@
-import { neon } from "@neondatabase/serverless"
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless"
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is not set")
+// 実際にクエリを呼ぶときに初めて DATABASE_URL を検査してクライアントを生成する。
+// （モジュール読み込み時に throw するとビルドのページデータ収集で失敗するため遅延化）
+let _sql: NeonQueryFunction<false, false> | null = null
+function getSql(): NeonQueryFunction<false, false> {
+  if (_sql) return _sql
+  const url = process.env.DATABASE_URL
+  if (!url) {
+    throw new Error("DATABASE_URL is not set")
+  }
+  _sql = neon(url)
+  return _sql
 }
 
 // サーバー専用の SQL クライアント（タグ付きテンプレートで自動的にパラメータ化される）
-export const sql = neon(process.env.DATABASE_URL)
+// getSql() に委譲することで、実行時にのみ接続を初期化する。
+export const sql = ((...args: Parameters<NeonQueryFunction<false, false>>) =>
+  (getSql() as (...a: unknown[]) => unknown)(...args)) as unknown as NeonQueryFunction<false, false>
 
 // アプリで使うカテゴリ（page.tsx と揃える）
 export const CATEGORY_KEYS = ["sns", "video", "game", "work", "other"] as const
