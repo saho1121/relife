@@ -243,10 +243,12 @@ export default function HomePage() {
 
   // 好きな写真をアイコンにする（正方形にトリミングして256pxに縮小して保存）
   const onUploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+    const input = e.target
+    const file = input.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onloadend = () => {
+      if (typeof reader.result !== "string") { input.value = ""; return }
       const img = new window.Image()
       img.onload = () => {
         const size = 256
@@ -254,17 +256,18 @@ export default function HomePage() {
         canvas.width = size
         canvas.height = size
         const ctx = canvas.getContext("2d")
-        if (!ctx) return
-        const min = Math.min(img.width, img.height)
-        const sx = (img.width - min) / 2
-        const sy = (img.height - min) / 2
-        ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size)
-        update({ customAvatar: canvas.toDataURL("image/jpeg", 0.82), avatar: "custom" })
+        if (ctx) {
+          const min = Math.min(img.width, img.height)
+          const sx = (img.width - min) / 2
+          const sy = (img.height - min) / 2
+          ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size)
+          update({ customAvatar: canvas.toDataURL("image/jpeg", 0.82), avatar: "custom" })
+        }
+        input.value = "" // 読み込み完了後にクリア（同じ写真を選び直せるように）
       }
-      img.src = reader.result as string
+      img.src = reader.result
     }
     reader.readAsDataURL(file)
-    e.target.value = ""
   }
 
   useEffect(() => {
