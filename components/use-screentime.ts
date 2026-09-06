@@ -63,5 +63,15 @@ export function useScreentime() {
     return json.syncKey as string
   }, [setSyncKey])
 
-  return { ready, syncKey, setSyncKey, createKey, data, error, isLoading, mutate }
+  // 既存のキーで端末を連携する（別の端末で発行したキーをこの端末に登録）
+  const linkKey = useCallback(async (rawKey: string) => {
+    const key = rawKey.trim()
+    // サーバーにキーが実在するか確認（未知のキーなら 404）
+    const res = await fetch(`/api/sync?key=${encodeURIComponent(key)}`)
+    if (!res.ok) return false
+    setSyncKey(key)
+    return true
+  }, [setSyncKey])
+
+  return { ready, syncKey, setSyncKey, createKey, linkKey, data, error, isLoading, mutate }
 }

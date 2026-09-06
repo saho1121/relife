@@ -239,7 +239,7 @@ export default function HomePage() {
   const [edited, setEdited] = useState(false)
 
   const { prefs, update, toggleTip } = usePrefs()
-  const { ready, syncKey, setSyncKey, createKey, data: sync, mutate } = useScreentime()
+  const { ready, syncKey, setSyncKey, createKey, linkKey, data: sync, mutate } = useScreentime()
 
   // 好きな写真をアイコンにする（正方形にトリミングして256pxに縮小して保存）
   const onUploadAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
