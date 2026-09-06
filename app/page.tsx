@@ -17,6 +17,8 @@ const tabs = [
 
 const WEEKLY = [3.2, 5.1, 4, 6.2, 3.8, 4.5, 2.9]
 const DAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"]
+// Date.getDay() (0=日曜) に対応する曜日ラベル
+const DAY_LABELS_BY_DOW = ["日", "月", "火", "水", "木", "金", "土"]
 
 // スクリーンタイムを何に使ったか、カテゴリで分けて記録する
 const CATEGORIES = [
@@ -104,7 +106,7 @@ const DECOS: { src: string; style: React.CSSProperties }[] = [
 // あなたのデータから、一人ひとりに合う習慣を組み立てる仕組み
 type Rec = { key: string; title: string; reason: string; step: string; effect: string; tone: string; score: number }
 
-function buildAnalysis(weekly: number[], breakdown: Breakdown, goal: number) {
+function buildAnalysis(weekly: number[], dayLabels: string[], breakdown: Breakdown, goal: number) {
   const today = CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0)
   const leisure = CATEGORIES.filter(c => c.kind === "leisure").reduce((sum, c) => sum + (breakdown[c.key] || 0), 0)
   const focus = today - leisure
@@ -157,10 +159,10 @@ function buildAnalysis(weekly: number[], breakdown: Breakdown, goal: number) {
     },
     {
       key: "worstday",
-      title: `${DAY_LABELS[worstIdx]}曜日に小さな予定を`,
+      title: `${dayLabels[worstIdx]}曜日に小さな予定を`,
       tone: "pink",
-      reason: `${DAY_LABELS[worstIdx]}曜が ${worstVal.toFixed(1)}時間 と、今週いちばん長め。`,
-      step: `${DAY_LABELS[worstIdx]}の夕方に散歩やお茶など、画面から離れる予定をひとつ入れてみよう。`,
+      reason: `${dayLabels[worstIdx]}曜が ${worstVal.toFixed(1)}時間 と、今週いちばん長め。`,
+      step: `${dayLabels[worstIdx]}の夕方に散歩やお茶など、画面から離れる予定をひとつ入れてみよう。`,
       effect: "ピークをならす",
       score: (Math.max(...weekly) - Math.min(...weekly)) * 1.5,
     },
@@ -278,15 +280,27 @@ export default function HomePage() {
 
   const synced = !!(syncKey && sync?.hasData)
 
-  const weekly = useMemo<number[]>(() => {
-    if (sync?.weekly && sync.weekly.length > 0) {
-      const filled = [...WEEKLY]
-      const recent = sync.weekly.slice(-7).map(w => w.hours)
-      for (let i = 0; i < recent.length; i++) filled[filled.length - recent.length + i] = recent[i]
-      return filled
+  // 実データは「直近7日のうちデータがある日だけ」しか来ないので、
+  // sync.day（サーバー基準の今日）を起点に直近7日ぶんの日付・曜日を組み立て、
+  // データが無い日は0時間として埋める（ダミー値と混在させない）。
+  const weeklyChart = useMemo<{ label: string; hours: number }[]>(() => {
+    if (sync?.day) {
+      const map = new Map((sync.weekly ?? []).map(w => [w.day, w.hours]))
+      const [y, m, d] = sync.day.split("-").map(Number)
+      const base = new Date(Date.UTC(y, m - 1, d))
+      const days: { label: string; hours: number }[] = []
+      for (let i = 6; i >= 0; i--) {
+        const dt = new Date(base)
+        dt.setUTCDate(base.getUTCDate() - i)
+        const iso = dt.toISOString().slice(0, 10)
+        days.push({ label: DAY_LABELS_BY_DOW[dt.getUTCDay()], hours: map.get(iso) ?? 0 })
+      }
+      return days
     }
-    return WEEKLY
+    return WEEKLY.map((hours, i) => ({ label: DAY_LABELS[i], hours }))
   }, [sync])
+  const weekly = useMemo(() => weeklyChart.map(w => w.hours), [weeklyChart])
+  const weekLabels = useMemo(() => weeklyChart.map(w => w.label), [weeklyChart])
 
   const screenTime = useMemo(() => CATEGORIES.reduce((sum, c) => sum + (breakdown[c.key] || 0), 0), [breakdown])
   const over = screenTime - goal
@@ -301,7 +315,7 @@ export default function HomePage() {
     : activeTab === "record" ? moodByGoal
     : streakFace(streak)
 
-  const analysis = useMemo(() => buildAnalysis(weekly, breakdown, goal), [weekly, breakdown, goal])
+  const analysis = useMemo(() => buildAnalysis(weekly, weekLabels, breakdown, goal), [weekly, weekLabels, breakdown, goal])
   const setCat = (key: CatKey, value: number) => { setEdited(true); setBreakdown(prev => ({ ...prev, [key]: Math.max(0, value || 0) })) }
   const disconnect = () => { setSyncKey(null); setEdited(false); setBreakdown(DEFAULT_BREAKDOWN) }
   const resync = () => { setEdited(false); mutate() }
@@ -339,7 +353,7 @@ export default function HomePage() {
         : <button type="button" className="sync-badge muted" onClick={() => switchTab("profile")}><Smartphone size={14} /><span>スマホのスクリーンタイムと同期する</span><ChevronRight size={14} /></button>}
       <label className="input-card goal-row" htmlFor="goal-time">目標にしたい時間<div className="number-input"><input id="goal-time" type="number" min="0" max="24" step=".5" value={goal} onChange={e => setGoal(Number(e.target.value))} /><span>時間</span></div></label>
       <button className="primary-button" onClick={analyze}>AIに分析してもらう <Sparkles size={18} /></button></section>}
-    {activeTab === "visual" && <section className="section-block"><p className="eyebrow">YOUR RHYTHM</p><h2>スクリーンタイムの見える化</h2><div className="chart-card"><div className="ring-wrap"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime.toFixed(1)}</strong><span>時間</span></div></div><small>今日のスクリーンタイム</small></div><div className="chart-bars">{weekly.map((value, i) => <div className="bar-column" key={i}><div className="bar-track"><div className="bar-fill" style={{height: `${value * 13}%`}} /></div><span>{DAY_LABELS[i]}</span></div>)}</div></div>
+    {activeTab === "visual" && <section className="section-block"><p className="eyebrow">YOUR RHYTHM</p><h2>スクリーンタイムの見える化</h2><div className="chart-card"><div className="ring-wrap"><div className="progress-ring" style={{"--progress": `${Math.min(100, screenTime / 8 * 100) * 3.6}deg`} as React.CSSProperties}><div className="ring-inner"><strong>{screenTime.toFixed(1)}</strong><span>時間</span></div></div><small>今日のスクリーンタイム</small></div><div className="chart-bars">{weeklyChart.map((w, i) => <div className="bar-column" key={i}><div className="bar-track"><div className="bar-fill" style={{height: `${w.hours * 13}%`}} /></div><span>{w.label}</span></div>)}</div></div>
       <div className="cat-breakdown"><p className="eyebrow">BY CATEGORY</p><h3 className="cat-break-title">なにに使ったか</h3><div className="cat-stack" role="img" aria-label="カテゴリ別の内訳">{analysis.parts.filter(p => p.value > 0).map(p => <span key={p.key} className="cat-seg" style={{width: `${p.share}%`, background: p.color}} title={`${p.label} ${p.value.toFixed(1)}h`} />)}</div><div className="cat-legend">{analysis.parts.map(p => <div className="cat-legend-item" key={p.key}><span className="cat-dot" style={{background: p.color}} /><span className="cat-legend-name">{p.label}</span><span className="cat-legend-val">{p.value.toFixed(1)}h</span></div>)}</div></div>
       <p className="soft-note">目標まであと <strong>{Math.max(0, goal - screenTime).toFixed(1)}時間</strong>。あなたのペースで大丈夫。</p></section>}
     {activeTab === "ai" && <section className={`analysis-page ${analyzing ? "is-analyzing" : ""}`}>

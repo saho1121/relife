@@ -4,8 +4,11 @@ import { sql, isCategoryKey, isValidSyncKey, CATEGORY_KEYS, type CategoryKey } f
 export const runtime = "nodejs"
 
 // 今日の日付（サーバーのローカル日付ではなく、送信側の day を優先）
+// サーバーはUTCで動くため、そのままだとJST 0:00〜8:59が前日扱いになる。
+// このアプリはJSTユーザーのみを想定しているため、JST基準の日付に固定する。
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return new Date(Date.now() + JST_OFFSET_MS).toISOString().slice(0, 10)
 }
 
 function isValidDay(v: unknown): v is string {
