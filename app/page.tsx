@@ -143,7 +143,7 @@ function buildAnalysis(weekly: number[], dayLabels: string[], breakdown: Breakdo
       key: "evening",
       title: "夜のスマホをそっと手放す",
       tone: "mint",
-      reason: `息抜きの時��が合計 ${leisure.toFixed(1)}時間。夜に積み重なっているのかも。`,
+      reason: `息抜きの時間が合計 ${leisure.toFixed(1)}時間。夜に積み重なっているのかも。`,
       step: "寝る30分前に、スマホをベッドから少し離れた場所へ。心と体が休む準備を始められます。",
       effect: "夜に -30分",
       score: leisure * 1.6 + (level === "over" ? 2 : 0),
